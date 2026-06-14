@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #FAF7F2;
+  --surface: #F0EBE3;
+  --border:  #D9D0C7;
+  --text:    #1A1A1A;
+  --muted:   #9C9080;
+  --accent:  #C17B3F;
+  --blue:    #4A7FA5;
+  --purple:  #7B5EA7;
+  --red:     #C0392B;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1.5rem 5rem;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 380px;
+  padding-bottom: 1.1rem;
+  margin-bottom: 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.logo-word {
+  font-family: 'Lora', Palatino, 'Palatino Linotype', Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: var(--text);
+}
+.logo-num {
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.timer {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+  transition: color 0.4s;
+}
+.timer.running { color: var(--text); }
+
+/* ── Constraints (top, muted) ────────────────────────────── */
+.constraints {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 2.25rem;
+  font-size: 0.63rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  width: 100%;
+  max-width: 380px;
+}
+.citem {
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  transition: color 0.3s;
+}
+.citem .cval {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.citem.blue   .cval { color: var(--blue); }
+.citem.purple .cval { color: var(--purple); }
+.citem.met    { color: var(--accent); }
+.citem.met .cval { color: var(--accent); }
+.cneed { opacity: 0.65; }
+.cdivider { color: var(--border); }
+
+/* ── Chain ───────────────────────────────────────────────── */
+.chain {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  max-width: 380px;
+}
+
+/* Anchor words */
+.word-anchor {
+  text-align: center;
+  font-family: 'Lora', Palatino, 'Palatino Linotype', Georgia, serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  padding: 0.15rem 0;
+}
+.anchor-start { color: var(--text); }
+.anchor-end   { color: var(--border); transition: color 0.5s; }
+.anchor-end.reached { color: var(--accent); }
+
+/* Input rows */
+.step-row { width: 100%; }
+.step-row input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--border);
+  padding: 0.85rem 0.25rem;
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  text-transform: uppercase;
+  outline: none;
+  transition: border-bottom-color 0.2s ease, color 0.2s ease;
+  caret-color: var(--accent);
+}
+.step-row input::placeholder {
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  font-size: 1.05rem;
+  opacity: 0.35;
+}
+.step-row input:focus:not(.state-L):not(.state-M):not(.state-X):not(.state-WIN) {
+  border-bottom-color: rgba(193,123,63,0.4);
+}
+.step-row input.state-L   { border-bottom-color: var(--blue); }
+.step-row input.state-M   { border-bottom-color: var(--purple); }
+.step-row input.state-X   { border-bottom-color: var(--red); color: var(--red); }
+.step-row input.state-WIN { border-bottom-color: var(--accent); color: var(--accent); }
+
+/* Connectors — two gap-lines merge into one continuous line when badge is hidden */
+.step-gap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 5px 0;
+}
+.gap-line {
+  width: 1px;
+  height: 11px;
+  background: var(--border);
+}
+
+/* Badges — JS still updates them; invisible in this design */
+.badge { display: none; }
+
+/* Move type label shown below each input line */
+.move-label {
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  height: 1.3rem;
+  line-height: 1.3rem;
+  color: transparent;
+  transition: color 0.2s ease;
+  user-select: none;
+}
+.move-label.label-L      { color: var(--blue); }
+.move-label.label-M      { color: var(--purple); }
+.move-label.label-X      { color: var(--red); }
+.move-label.label-repeat { color: var(--muted); }
+
+/* Final connector line turns blue/purple when auto-step validates */
+.gap-line.line-L { background: var(--blue); }
+.gap-line.line-M { background: var(--purple); }
+
+/* ── Rules ───────────────────────────────────────────────── */
+.rules {
+  margin-top: 2.25rem;
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 2;
+  opacity: 0.65;
+  letter-spacing: 0.04em;
+}
+.rules b { font-weight: 600; opacity: 0.8; }
+
+/* ── Win overlay ─────────────────────────────────────────── */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(250,247,242,0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.overlay.show { display: flex; }
+
+.win-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2.25rem 2rem 1.75rem;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 4px 40px rgba(0,0,0,0.07);
+  animation: popIn 0.4s cubic-bezier(.34,1.56,.64,1) both;
+  position: relative;
+}
+.win-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, color 0.2s;
+}
+.win-close:hover { border-color: var(--muted); color: var(--text); }
+@keyframes popIn {
+  from { transform: scale(.92) translateY(16px); opacity: 0; }
+  to   { transform: scale(1)   translateY(0);    opacity: 1; }
+}
+
+.win-eyebrow {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.win-title {
+  font-family: 'Lora', Palatino, 'Palatino Linotype', Georgia, serif;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.03em;
+}
+.win-time {
+  font-family: 'Lora', Palatino, 'Palatino Linotype', Georgia, serif;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  margin: 0.35rem 0 1.4rem;
+}
+
+.win-path {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+}
+.win-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem 0.2rem;
+  line-height: 1.8;
+}
+.win-word {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--text);
+}
+.win-word.is-end { color: var(--accent); }
+.win-arrow {
+  font-size: 0.65rem;
+  font-weight: 400;
+  opacity: 0.85;
+}
+.win-arrow.L { color: var(--blue); }
+.win-arrow.M { color: var(--purple); }
+
+/* keep legacy win-row/win-badge/win-arr for JS compat (not rendered visibly) */
+.win-row, .win-arr, .win-badge { display: none; }
+
+.emoji-share {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.btn-row { display: flex; justify-content: center; }
+.btn {
+  padding: 0.62rem 2rem;
+  border: 1.5px solid var(--border);
+  border-radius: 99px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.73rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text);
+  transition: opacity 0.18s, transform 0.1s, border-color 0.2s, color 0.2s;
+}
+.btn:hover { opacity: 0.6; }
+.btn:active { transform: scale(.97); }
+.btn-copy.copied { border-color: var(--accent); color: var(--accent); }
+
+.win-tomorrow {
+  margin-top: 1rem;
+  font-size: 0.58rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+/* ── Help button ─────────────────────────────────────────── */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.help-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.2s, color 0.2s;
+  line-height: 1;
+}
+.help-btn:hover { border-color: var(--muted); color: var(--text); }
+
+/* ── Help overlay ─────────────────────────────────────────── */
+.help-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(250,247,242,0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+.help-overlay.show { display: flex; }
+
+.help-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 1.5rem 1.6rem 1.4rem;
+  max-width: 360px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 40px rgba(0,0,0,0.07);
+  animation: popIn 0.3s cubic-bezier(.34,1.56,.64,1) both;
+}
+
+.help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.help-title {
+  font-family: 'Lora', Palatino, 'Palatino Linotype', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.help-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.2s, color 0.2s;
+}
+.help-close:hover { border-color: var(--muted); color: var(--text); }
+
+.help-intro {
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.65;
+  margin-bottom: 1.1rem;
+}
+
+.help-section {
+  margin-bottom: 1.1rem;
+}
+.help-section-label {
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.55rem;
+}
+
+.help-move {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.7rem;
+}
+.help-move:last-child { margin-bottom: 0; }
+.help-move-head {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.help-move-sub {
+  font-size: 0.68rem;
+  color: var(--muted);
+  padding-left: 1.3rem;
+  margin-bottom: 0.2rem;
+  line-height: 1.5;
+}
+.help-egs {
+  display: flex;
+  gap: 0.5rem;
+  padding-left: 1.3rem;
+  flex-wrap: wrap;
+}
+.help-eg {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  color: var(--text);
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 0.18rem 0.5rem;
+  white-space: nowrap;
+}
+
+.help-rules {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.help-rules li {
+  font-size: 0.72rem;
+  color: var(--text);
+  line-height: 1.5;
+  padding-left: 0.9rem;
+  position: relative;
+}
+.help-rules li::before {
+  content: '·';
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+}
+
+.help-assoc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+}
+.help-assoc-row {
+  display: flex;
+  gap: 0.45rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  align-items: baseline;
+}
+.help-assoc-mark {
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 0.75rem;
+}
+.help-assoc-mark.good { color: #5c9e6e; }
+.help-assoc-mark.bad  { color: var(--red); }
+.help-assoc-type {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 6.5rem;
+  flex-shrink: 0;
+}
+.help-assoc-eg {
+  color: var(--muted);
+}
+
+.help-tip {
+  font-size: 0.67rem;
+  color: var(--muted);
+  line-height: 1.7;
+  font-style: italic;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg);
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.help-footer {
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-word">DRIFT</div>
+    <div class="logo-num" id="puzzle-num">#1</div>
+  </div>
+  <div class="header-right">
+    <div class="timer" id="timer">0:00</div>
+    <button class="help-btn" onclick="openHelp()" aria-label="How to play">?</button>
+  </div>
+</header>
+
+<div class="constraints">
+  <div class="citem blue" id="citem-L">
+    <span class="cval" id="count-L">0</span>
+    <span class="cneed">/ 2 L</span>
+  </div>
+  <span class="cdivider">·</span>
+  <div class="citem purple" id="citem-M">
+    <span class="cval" id="count-M">0</span>
+    <span class="cneed">/ 2 M</span>
+  </div>
+  <span class="cdivider">·</span>
+  <div class="citem" id="citem-steps">
+    <span class="cval" id="count-steps">0</span>
+    <span class="cneed">/ 5</span>
+  </div>
+</div>
+
+<div class="chain" id="chain"></div>
+
+<div class="rules">
+  <b>L</b> change, add, or drop one letter &nbsp;·&nbsp; <b>M</b> synonym<br>
+  exactly 5 steps · at least 2 of each
+</div>
+
+<!-- Win overlay -->
+<div class="overlay" id="overlay">
+  <div class="win-card">
+    <button class="win-close" onclick="closeWin()" aria-label="Close">✕</button>
+    <div class="win-eyebrow" id="win-eyebrow">Drift #1</div>
+    <div class="win-title">drifted.</div>
+    <div class="win-time" id="win-time">0:00</div>
+    <div class="win-path" id="win-path"></div>
+    <div class="emoji-share" id="emoji-share"></div>
+    <div class="btn-row">
+      <button class="btn btn-copy" id="btn-copy" onclick="copyResult()">Copy result</button>
+    </div>
+    <div class="win-tomorrow" id="win-tomorrow"></div>
+  </div>
+</div>
+
+<!-- Help overlay -->
+<div class="help-overlay" id="help-overlay" onclick="if(event.target===this)closeHelp()">
+  <div class="help-card">
+
+    <div class="help-head">
+      <div class="help-title">How to Play</div>
+      <button class="help-close" onclick="closeHelp()" aria-label="Close">✕</button>
+    </div>
+
+    <p class="help-intro">Connect <strong>START</strong> to <strong>END</strong> in exactly 5 steps.</p>
+
+    <div class="help-section">
+      <div class="help-section-label">Each step is either a</div>
+      <div class="help-move">
+        <div class="help-move-head"><span>🔵</span> Letter move</div>
+        <div class="help-move-sub">change, add, or drop one letter</div>
+        <div class="help-egs">
+          <span class="help-eg">COLD → BOLD</span>
+          <span class="help-eg">GREED → CREED</span>
+        </div>
+      </div>
+      <div class="help-move">
+        <div class="help-move-head"><span>🟣</span> Meaning move</div>
+        <div class="help-move-sub">a word people strongly associate with the previous</div>
+        <div class="help-egs">
+          <span class="help-eg">GREED → MONEY</span>
+          <span class="help-eg">DOG → HOT</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-label">Rules</div>
+      <ul class="help-rules">
+        <li>Exactly 5 steps</li>
+        <li>At least 2 letter moves</li>
+        <li>At least 2 meaning moves</li>
+        <li>No repeating words</li>
+      </ul>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-label">Good meaning moves</div>
+      <div class="help-assoc">
+        <div class="help-assoc-row">
+          <span class="help-assoc-mark good">✓</span>
+          <span class="help-assoc-type">Compound words</span>
+          <span class="help-assoc-eg">HOT + DOG, &nbsp;GREEN + HOUSE</span>
+        </div>
+        <div class="help-assoc-row">
+          <span class="help-assoc-mark good">✓</span>
+          <span class="help-assoc-type">Opposites</span>
+          <span class="help-assoc-eg">HOT ↔ COLD, &nbsp;LIGHT ↔ DARK</span>
+        </div>
+        <div class="help-assoc-row">
+          <span class="help-assoc-mark good">✓</span>
+          <span class="help-assoc-type">Strong pairs</span>
+          <span class="help-assoc-eg">BREAD + BUTTER, &nbsp;SUN + MOON</span>
+        </div>
+        <div class="help-assoc-row">
+          <span class="help-assoc-mark bad">✗</span>
+          <span class="help-assoc-type">Logical leaps</span>
+          <span class="help-assoc-eg">TREE → MONEY, &nbsp;BREED → BIRTH</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="help-tip">
+      Meaning moves are based on what people naturally associate —
+      think instinct, not logic.
+    </div>
+
+    <div class="help-footer">A new puzzle every day.</div>
+
+  </div>
+</div>
+
+<script src="puzzles_data.js"></script>
+<script src="words_game.js"></script>
+<script src="usf_graph.js"></script>
+<script>
+// ── Puzzle state ───────────────────────────────────────────────────────────────
+let PUZZLES = {};      // date-keyed: { "2026-06-12": { id, start, end }, ... }
+let puzzle  = null;
+let START   = '';
+let END     = '';
+
+const STEPS       = 5;   // total moves (transitions)
+const USER_INPUTS = 4;   // slots the player types; final step to END is auto-validated
+const MIN_EACH    = 2;
+const DEBOUNCE_MS = 650;
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let stepResults   = Array(STEPS).fill(null);
+let debounceIds   = Array(STEPS).fill(null);
+let startTime     = null;
+let timerInterval = null;
+let gameWon       = false;
+
+// ── Word lists (loaded at init) ────────────────────────────────────────────────
+let FREQ_WORDS   = new Set(); // words_alpha 3-6 chars — letter move validation
+let USF_NBRS     = new Map(); // bidirectional USF graph — primary meaning moves
+let MEANING_NBRS = new Map(); // per-puzzle rel_syn — fallback for non-USF words
+
+// ── Edit distance ──────────────────────────────────────────────────────────────
+function editDist(a, b) {
+  const m = a.length, n = b.length;
+  const prev = Array.from({length: n+1}, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++)
+      cur[j] = a[i-1] === b[j-1] ? prev[j-1] : 1 + Math.min(prev[j-1], prev[j], cur[j-1]);
+    prev.splice(0, n+1, ...cur);
+  }
+  return prev[n];
+}
+
+// ── Step validation (fully local, no network) ──────────────────────────────────
+function validateStep(prev, curr) {
+  if (!curr || !prev) return null;
+  prev = prev.toLowerCase().trim();
+  curr = curr.toLowerCase().trim();
+  if (!/^[a-z]+$/.test(curr)) return { type: null, valid: false };
+
+  // Letter move: edit distance 1 AND real word
+  if (editDist(prev, curr) === 1 && FREQ_WORDS.has(curr)) {
+    return { type: 'L', valid: true };
+  }
+  // Meaning move: USF graph (primary, bidirectional)
+  const usfNbrs = USF_NBRS.get(prev);
+  if (usfNbrs && usfNbrs.has(curr)) {
+    return { type: 'M', valid: true };
+  }
+  // Meaning move: per-puzzle rel_syn fallback (words not in USF)
+  const synNbrs = MEANING_NBRS.get(prev);
+  if (synNbrs && synNbrs.has(curr)) {
+    return { type: 'M', valid: true };
+  }
+  return { type: null, valid: false };
+}
+
+// ── DOM helpers ────────────────────────────────────────────────────────────────
+const getInput = i => document.getElementById(`inp-${i}`);
+const getBadge = i => document.getElementById(`badge-${i}`);
+
+const BADGE_LABEL = { empty: '', typing: '···', loading: '···', L: 'L', M: 'M', X: '✕' };
+
+function setBadge(i, state) {
+  const el = getBadge(i);
+  if (!el) return;
+  el.className = `badge ${state}`;
+  el.textContent = BADGE_LABEL[state] ?? '';
+}
+
+function setInputState(i, state) {
+  const inp = getInput(i);
+  if (!inp) return;
+  inp.className = state ? `state-${state}` : '';
+}
+
+const MOVE_TEXT = { L: 'letter', M: 'meaning', X: '✕', repeat: 'used' };
+function setMoveLabel(i, state) {
+  const el = document.getElementById(`label-${i}`);
+  if (!el) return;
+  el.className = `move-label${state ? ` label-${state}` : ''}`;
+  el.textContent = MOVE_TEXT[state] ?? '';
+}
+
+function getPrevWord(i) {
+  if (i === 0) return START;
+  return getInput(i-1)?.value.trim() || '';
+}
+
+// ── Auto-validate the final step (last user input → END) ──────────────────────
+function updateFinalStep() {
+  const lastWord   = getInput(USER_INPUTS - 1)?.value.trim();
+  const lastResult = stepResults[USER_INPUTS - 1];
+  let autoResult   = null;
+  if (lastWord && lastResult?.valid) {
+    autoResult = validateStep(lastWord, END);
+  }
+  stepResults[STEPS - 1] = autoResult;
+
+  const finalLine = document.getElementById('final-line');
+  if (finalLine) {
+    finalLine.className = `gap-line${autoResult?.valid ? ` line-${autoResult.type}` : ''}`;
+  }
+  document.querySelector('.anchor-end')
+    ?.classList.toggle('reached', autoResult?.valid === true);
+}
+
+// ── Timer ──────────────────────────────────────────────────────────────────────
+function startTimer() {
+  if (startTime !== null) return;
+  startTime = Date.now();
+  document.getElementById('timer').classList.add('running');
+  timerInterval = setInterval(updateTimer, 200);
+}
+function stopTimer() { clearInterval(timerInterval); timerInterval = null; }
+function updateTimer() {
+  const s = Math.floor((Date.now() - startTime) / 1000);
+  document.getElementById('timer').textContent = fmtTime(s);
+}
+function fmtTime(s) {
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+function elapsed() {
+  return startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+}
+
+// ── Constraints ────────────────────────────────────────────────────────────────
+function updateConstraints() {
+  const lc = stepResults.filter(r => r?.type === 'L').length;
+  const mc = stepResults.filter(r => r?.type === 'M').length;
+  const vc = stepResults.filter(r => r?.valid).length;
+  document.getElementById('count-L').textContent     = lc;
+  document.getElementById('count-M').textContent     = mc;
+  document.getElementById('count-steps').textContent = vc;
+  document.getElementById('citem-L').classList.toggle('met', lc >= MIN_EACH);
+  document.getElementById('citem-M').classList.toggle('met', mc >= MIN_EACH);
+  document.getElementById('citem-steps').classList.toggle('met', vc === STEPS);
+}
+
+// ── Win ────────────────────────────────────────────────────────────────────────
+function checkWin() {
+  if (gameWon) return;
+  const allValid = stepResults.every(r => r?.valid);
+  const lc = stepResults.filter(r => r?.type === 'L').length;
+  const mc = stepResults.filter(r => r?.type === 'M').length;
+  if (allValid && lc >= MIN_EACH && mc >= MIN_EACH) {
+    triggerWin();
+  }
+}
+
+function triggerWin() {
+  gameWon = true;
+  stopTimer();
+  document.querySelector('.anchor-end')?.classList.add('reached');
+
+  const timeStr = fmtTime(elapsed());
+  document.getElementById('win-eyebrow').textContent = puzzle ? `Drift #${puzzle.id}` : 'Drift';
+  document.getElementById('win-time').textContent = timeStr;
+
+  // Path: inline chain with colored arrows
+  const words = [
+    START.toUpperCase(),
+    ...Array.from({length: USER_INPUTS}, (_, i) => getInput(i).value.trim().toUpperCase()),
+    END.toUpperCase(),
+  ];
+  const pathEl = document.getElementById('win-path');
+  pathEl.innerHTML = '';
+  const chainEl = document.createElement('div');
+  chainEl.className = 'win-chain';
+  words.forEach((word, i) => {
+    const wspan = document.createElement('span');
+    wspan.className = `win-word${i === words.length-1 ? ' is-end' : ''}`;
+    wspan.textContent = word;
+    chainEl.appendChild(wspan);
+    if (i < STEPS) {
+      const arr = document.createElement('span');
+      arr.className = `win-arrow ${stepResults[i].type}`;
+      arr.textContent = '→';
+      chainEl.appendChild(arr);
+    }
+  });
+  pathEl.appendChild(chainEl);
+
+  // Emoji share
+  const emojis = stepResults.map(r => r?.type === 'L' ? '🔵' : '🟣').join('');
+  document.getElementById('emoji-share').textContent = emojis;
+
+  const puzzleLabel = puzzle ? `Drift #${puzzle.id}` : 'Drift';
+  window._shareText = `${puzzleLabel} · ${timeStr}\n${emojis}\n🔵 letter  🟣 meaning`;
+
+  // Tomorrow's date
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tStr = tomorrow.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+  document.getElementById('win-tomorrow').textContent = `next puzzle ${tStr}`;
+
+  document.getElementById('overlay').classList.add('show');
+}
+
+// ── Copy result ────────────────────────────────────────────────────────────────
+function copyResult() {
+  const btn = document.getElementById('btn-copy');
+  const text = window._shareText || '';
+  const finish = () => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy result'; btn.classList.remove('copied'); }, 2000);
+  };
+  navigator.clipboard.writeText(text).then(finish).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    finish();
+  });
+}
+
+// ── Input handlers ─────────────────────────────────────────────────────────────
+function onInput(i) {
+  if (gameWon) return;
+  const inp  = getInput(i);
+  const raw  = inp.value;
+  const filt = raw.replace(/[^a-zA-Z]/g, '');
+  if (raw !== filt) inp.value = filt;
+
+  if (!filt) {
+    setBadge(i, 'empty'); setInputState(i, null); setMoveLabel(i, null);
+    stepResults[i] = null;
+    for (let j = i+1; j < USER_INPUTS; j++) {
+      if (getInput(j)?.value.trim()) {
+        setBadge(j, 'empty'); setInputState(j, null); setMoveLabel(j, null); stepResults[j] = null;
+      }
+    }
+    updateFinalStep();
+    updateConstraints();
+    return;
+  }
+
+  if (!startTime) startTimer();
+  setBadge(i, 'typing');
+  setMoveLabel(i, null);
+  clearTimeout(debounceIds[i]);
+  debounceIds[i] = setTimeout(() => runValidation(i), DEBOUNCE_MS);
+}
+
+// Words already placed in the chain up to (not including) step i
+function usedWords(upToIdx) {
+  const used = new Set([START.toLowerCase(), END.toLowerCase()]);
+  for (let j = 0; j < upToIdx; j++) {
+    const v = getInput(j)?.value.trim().toLowerCase();
+    if (v) used.add(v);
+  }
+  return used;
+}
+
+function runValidation(startIdx) {
+  for (let i = startIdx; i < USER_INPUTS; i++) {
+    const word = getInput(i)?.value.trim();
+    if (!word) break;
+    const prev = getPrevWord(i);
+    if (!prev) { setBadge(i, 'empty'); break; }
+
+    const isRepeat = usedWords(i).has(word.toLowerCase());
+    const result   = isRepeat ? { type: null, valid: false } : validateStep(prev, word);
+    stepResults[i] = result;
+
+    if (isRepeat) {
+      setBadge(i, 'X'); setInputState(i, 'X'); setMoveLabel(i, 'repeat');
+    } else if (!result?.valid) {
+      setBadge(i, 'X'); setInputState(i, 'X'); setMoveLabel(i, 'X');
+    } else {
+      setBadge(i, result.type); setInputState(i, result.type); setMoveLabel(i, result.type);
+    }
+  }
+  updateFinalStep();
+  updateConstraints();
+  checkWin();
+}
+
+function onKeydown(i, e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    clearTimeout(debounceIds[i]);
+    runValidation(i);
+    if (i+1 < USER_INPUTS) getInput(i+1)?.focus();
+  }
+}
+
+// ── Build chain DOM ────────────────────────────────────────────────────────────
+function buildChain() {
+  const chain = document.getElementById('chain');
+  chain.innerHTML = '';
+
+  const startEl = document.createElement('div');
+  startEl.className = 'word-anchor anchor-start';
+  startEl.textContent = START.toUpperCase();
+  chain.appendChild(startEl);
+
+  for (let i = 0; i < USER_INPUTS; i++) {
+    const gap = document.createElement('div');
+    gap.className = 'step-gap';
+    gap.innerHTML = `<div class="gap-line"></div><div class="badge empty" id="badge-${i}"></div><div class="gap-line"></div>`;
+    chain.appendChild(gap);
+
+    const row = document.createElement('div');
+    row.className = 'step-row';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id   = `inp-${i}`;
+    inp.autocomplete = 'off';
+    inp.spellcheck   = false;
+    inp.setAttribute('autocorrect', 'off');
+    inp.setAttribute('autocapitalize', 'none');
+    inp.addEventListener('input',   () => onInput(i));
+    inp.addEventListener('keydown', e  => onKeydown(i, e));
+    row.appendChild(inp);
+    const lbl = document.createElement('div');
+    lbl.className = 'move-label';
+    lbl.id = `label-${i}`;
+    row.appendChild(lbl);
+    chain.appendChild(row);
+  }
+
+  const finalGap = document.createElement('div');
+  finalGap.className = 'step-gap';
+  finalGap.innerHTML = '<div class="gap-line" id="final-line"></div>';
+  chain.appendChild(finalGap);
+
+  const endEl = document.createElement('div');
+  endEl.className = 'word-anchor anchor-end';
+  endEl.textContent = END.toUpperCase();
+  chain.appendChild(endEl);
+}
+
+// ── Load puzzle ────────────────────────────────────────────────────────────────
+function loadPuzzle(puzz) {
+  puzzle = puzz;
+  START  = puzz.start.toLowerCase();
+  END    = puzz.end.toLowerCase();
+
+  MEANING_NBRS = new Map();
+  for (const [word, nbrs] of Object.entries(puzz.meaning_neighbors ?? {})) {
+    MEANING_NBRS.set(word, new Set(nbrs));
+  }
+
+  gameWon     = false;
+  stepResults = Array(STEPS).fill(null);
+  debounceIds = Array(STEPS).fill(null);
+  startTime   = null;
+  stopTimer();
+
+  document.getElementById('timer').textContent = '0:00';
+  document.getElementById('timer').classList.remove('running');
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('puzzle-num').textContent = `#${puzzle.id}`;
+
+  buildChain();
+  updateConstraints();
+  getInput(0)?.focus();
+}
+
+// ── Help modal ────────────────────────────────────────────────────────────────
+function openHelp()  { document.getElementById('help-overlay').classList.add('show'); }
+function closeHelp() { document.getElementById('help-overlay').classList.remove('show'); }
+function closeWin()  { document.getElementById('overlay').classList.remove('show'); }
+
+// ── Init (date-keyed) ──────────────────────────────────────────────────────────
+function init() {
+  if (window.DRIFT_WORDS) {
+    FREQ_WORDS = new Set(window.DRIFT_WORDS.split('\n').filter(Boolean));
+  }
+  if (window.USF_GRAPH) {
+    for (const [word, nbrs] of Object.entries(window.USF_GRAPH)) {
+      USF_NBRS.set(word, new Set(nbrs));
+    }
+  }
+  PUZZLES = window.DRIFT_PUZZLES ?? {};
+  const today = new Date().toISOString().slice(0, 10);
+  const puzz  = PUZZLES[today] ?? Object.values(PUZZLES)[0];
+  loadPuzzle(puzz);
+}
+
+init();
+</script>
+</body>
+</html>
