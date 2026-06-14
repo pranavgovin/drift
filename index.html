@@ -78,7 +78,7 @@ header {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  margin-bottom: 2.25rem;
+  margin-bottom: 0.55rem;
   font-size: 0.63rem;
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -97,12 +97,45 @@ header {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.citem.blue   .cval { color: var(--blue); }
-.citem.purple .cval { color: var(--purple); }
+.citem.blue   { color: var(--blue); }
+.citem.purple { color: var(--purple); }
 .citem.met    { color: var(--accent); }
-.citem.met .cval { color: var(--accent); }
 .cneed { opacity: 0.65; }
 .cdivider { color: var(--border); }
+
+/* ── Move-balance warning ─────────────────────────────────── */
+.chain-warning {
+  width: 100%;
+  max-width: 380px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  text-align: center;
+  min-height: 1.1rem;
+  line-height: 1.1rem;
+  margin-bottom: 1.6rem;
+  opacity: 0.85;
+  transition: opacity 0.2s;
+}
+.chain-warning:empty { opacity: 0; }
+
+/* ── Final-link error ─────────────────────────────────────── */
+.final-error {
+  width: 100%;
+  max-width: 380px;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--red);
+  text-align: center;
+  min-height: 1.1rem;
+  line-height: 1.1rem;
+  margin-top: 0.45rem;
+  transition: opacity 0.2s;
+  opacity: 1;
+}
+.final-error:empty { opacity: 0; }
 
 /* ── Chain ───────────────────────────────────────────────── */
 .chain {
@@ -580,15 +613,9 @@ header {
 </header>
 
 <div class="constraints">
-  <div class="citem blue" id="citem-L">
-    <span class="cval" id="count-L">0</span>
-    <span class="cneed">/ 2 L</span>
-  </div>
+  <div class="citem blue" id="citem-L">Need 2 more Letter</div>
   <span class="cdivider">·</span>
-  <div class="citem purple" id="citem-M">
-    <span class="cval" id="count-M">0</span>
-    <span class="cneed">/ 2 M</span>
-  </div>
+  <div class="citem purple" id="citem-M">Need 2 more Meaning</div>
   <span class="cdivider">·</span>
   <div class="citem" id="citem-steps">
     <span class="cval" id="count-steps">0</span>
@@ -596,7 +623,11 @@ header {
   </div>
 </div>
 
+<div class="chain-warning" id="chain-warning"></div>
+
 <div class="chain" id="chain"></div>
+
+<div class="final-error" id="final-error"></div>
 
 <div class="rules">
   <b>L</b> change, add, or drop one letter &nbsp;·&nbsp; <b>M</b> synonym<br>
@@ -885,12 +916,56 @@ function updateConstraints() {
   const lc = stepResults.filter(r => r?.type === 'L').length;
   const mc = stepResults.filter(r => r?.type === 'M').length;
   const vc = stepResults.filter(r => r?.valid).length;
-  document.getElementById('count-L').textContent     = lc;
-  document.getElementById('count-M').textContent     = mc;
+
+  // ── Constraint bar labels ──────────────────────────────────────────────────
+  const lMet = lc >= MIN_EACH;
+  const mMet = mc >= MIN_EACH;
+  const cL = document.getElementById('citem-L');
+  const cM = document.getElementById('citem-M');
+  if (cL) {
+    cL.textContent = lMet ? '✓ Letter' : `Need ${MIN_EACH - lc} more Letter`;
+    cL.classList.toggle('met', lMet);
+  }
+  if (cM) {
+    cM.textContent = mMet ? '✓ Meaning' : `Need ${MIN_EACH - mc} more Meaning`;
+    cM.classList.toggle('met', mMet);
+  }
   document.getElementById('count-steps').textContent = vc;
-  document.getElementById('citem-L').classList.toggle('met', lc >= MIN_EACH);
-  document.getElementById('citem-M').classList.toggle('met', mc >= MIN_EACH);
   document.getElementById('citem-steps').classList.toggle('met', vc === STEPS);
+
+  // ── Move-balance warning ───────────────────────────────────────────────────
+  // Condition: player has so many L (or M) valid moves that they can't reach
+  // MIN_EACH of the other type without changing an existing valid move.
+  // (STEPS - lc) = remaining non-L connections; must be >= (MIN_EACH - mc).
+  const warnEl = document.getElementById('chain-warning');
+  if (warnEl) {
+    if (gameWon) { warnEl.textContent = ''; }
+    else {
+      const warnM = (STEPS - lc) < (MIN_EACH - mc); // too many L
+      const warnL = (STEPS - mc) < (MIN_EACH - lc); // too many M
+      if (warnM) {
+        const n = MIN_EACH - mc;
+        warnEl.textContent = `You need at least ${n} more meaning move${n === 1 ? '' : 's'}`;
+      } else if (warnL) {
+        const n = MIN_EACH - lc;
+        warnEl.textContent = `You need at least ${n} more letter move${n === 1 ? '' : 's'}`;
+      } else {
+        warnEl.textContent = '';
+      }
+    }
+  }
+
+  // ── Final-link error ───────────────────────────────────────────────────────
+  const errEl = document.getElementById('final-error');
+  if (errEl) {
+    const allFilled = [0,1,2,3].every(i => getInput(i)?.value.trim());
+    if (!gameWon && allFilled && stepResults[4] && !stepResults[4].valid) {
+      const slot3 = getInput(3)?.value.trim().toUpperCase();
+      errEl.textContent = `${slot3} → ${END.toUpperCase()}: no valid connection`;
+    } else {
+      errEl.textContent = '';
+    }
+  }
 }
 
 // ── Win ────────────────────────────────────────────────────────────────────────
