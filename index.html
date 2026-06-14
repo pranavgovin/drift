@@ -194,9 +194,10 @@ header {
 .move-label.label-X      { color: var(--red); }
 .move-label.label-repeat { color: var(--muted); }
 
-/* Final connector line turns blue/purple when auto-step validates */
+/* Connector lines are colored once both adjacent words are filled */
 .gap-line.line-L { background: var(--blue); }
 .gap-line.line-M { background: var(--purple); }
+.gap-line.line-X { background: var(--red); }
 
 /* ── Rules ───────────────────────────────────────────────── */
 .rules {
@@ -785,27 +786,78 @@ function setMoveLabel(i, state) {
   el.textContent = MOVE_TEXT[state] ?? '';
 }
 
-function getPrevWord(i) {
-  if (i === 0) return START;
-  return getInput(i-1)?.value.trim() || '';
+// words[0]=START, words[1..4]=slot 0..3 values, words[5]=END
+function getChainWords() {
+  return [
+    START,
+    ...[0,1,2,3].map(i => getInput(i)?.value.trim().toLowerCase() || ''),
+    END,
+  ];
 }
 
-// ── Auto-validate the final step (last user input → END) ──────────────────────
-function updateFinalStep() {
-  const lastWord   = getInput(USER_INPUTS - 1)?.value.trim();
-  const lastResult = stepResults[USER_INPUTS - 1];
-  let autoResult   = null;
-  if (lastWord && lastResult?.valid) {
-    autoResult = validateStep(lastWord, END);
+// True if the word at slotIdx appears elsewhere in the filled chain
+function checkRepeat(slotIdx, word) {
+  if (!word) return false;
+  const lower = word.toLowerCase();
+  if (START.toLowerCase() === lower) return true;
+  if (END.toLowerCase()   === lower) return true;
+  for (let j = 0; j < USER_INPUTS; j++) {
+    if (j === slotIdx) continue;
+    const v = getInput(j)?.value.trim().toLowerCase();
+    if (v && v === lower) return true;
   }
-  stepResults[STEPS - 1] = autoResult;
+  return false;
+}
 
-  const finalLine = document.getElementById('final-line');
-  if (finalLine) {
-    finalLine.className = `gap-line${autoResult?.valid ? ` line-${autoResult.type}` : ''}`;
+// Color the connector element(s) for connection k (0=START→slot0, …, 4=slot3→END)
+function setConnLine(k, result) {
+  const type = result?.valid ? result.type : (result ? 'X' : null);
+  const cls  = `gap-line${type ? ` line-${type}` : ''}`;
+  if (k < USER_INPUTS) {
+    const t = document.getElementById(`line-top-${k}`);
+    const b = document.getElementById(`line-bot-${k}`);
+    if (t) t.className = cls;
+    if (b) b.className = cls;
+  } else {
+    const f = document.getElementById('final-line');
+    if (f) f.className = cls;
   }
+}
+
+// Update all input underlines, labels, connector lines, and END anchor
+function updateVisuals() {
+  for (let k = 0; k < STEPS; k++) setConnLine(k, stepResults[k]);
+
+  for (let i = 0; i < USER_INPUTS; i++) {
+    const word = getInput(i)?.value.trim();
+    if (!word) { setInputState(i, null); setMoveLabel(i, null); continue; }
+
+    // stepResults[i]   = connection INTO slot i (from above)
+    // stepResults[i+1] = connection FROM slot i downward (or to END for i=3)
+    const above = stepResults[i];
+    const below = stepResults[i + 1];
+
+    const aboveInvalid = above && !above.valid;
+    const belowInvalid = below && !below.valid;
+
+    if (aboveInvalid) {
+      setInputState(i, 'X');
+      setMoveLabel(i, above.repeat ? 'repeat' : 'X');
+    } else if (belowInvalid) {
+      setInputState(i, 'X');
+      setMoveLabel(i, above?.type ?? null);
+    } else if (above?.valid) {
+      setInputState(i, above.type);
+      setMoveLabel(i, above.type);
+    } else {
+      // above is null (word above not yet filled) and below is valid or null
+      setInputState(i, null);
+      setMoveLabel(i, null);
+    }
+  }
+
   document.querySelector('.anchor-end')
-    ?.classList.toggle('reached', autoResult?.valid === true);
+    ?.classList.toggle('reached', stepResults[STEPS - 1]?.valid === true);
 }
 
 // ── Timer ──────────────────────────────────────────────────────────────────────
@@ -927,15 +979,8 @@ function onInput(i) {
   if (raw !== filt) inp.value = filt;
 
   if (!filt) {
-    setBadge(i, 'empty'); setInputState(i, null); setMoveLabel(i, null);
-    stepResults[i] = null;
-    for (let j = i+1; j < USER_INPUTS; j++) {
-      if (getInput(j)?.value.trim()) {
-        setBadge(j, 'empty'); setInputState(j, null); setMoveLabel(j, null); stepResults[j] = null;
-      }
-    }
-    updateFinalStep();
-    updateConstraints();
+    setInputState(i, null); setMoveLabel(i, null);
+    runValidation();
     return;
   }
 
@@ -943,39 +988,28 @@ function onInput(i) {
   setBadge(i, 'typing');
   setMoveLabel(i, null);
   clearTimeout(debounceIds[i]);
-  debounceIds[i] = setTimeout(() => runValidation(i), DEBOUNCE_MS);
+  debounceIds[i] = setTimeout(() => runValidation(), DEBOUNCE_MS);
 }
 
-// Words already placed in the chain up to (not including) step i
-function usedWords(upToIdx) {
-  const used = new Set([START.toLowerCase(), END.toLowerCase()]);
-  for (let j = 0; j < upToIdx; j++) {
-    const v = getInput(j)?.value.trim().toLowerCase();
-    if (v) used.add(v);
-  }
-  return used;
-}
+function runValidation() {
+  const words = getChainWords(); // [START, s0, s1, s2, s3, END]
 
-function runValidation(startIdx) {
-  for (let i = startIdx; i < USER_INPUTS; i++) {
-    const word = getInput(i)?.value.trim();
-    if (!word) break;
-    const prev = getPrevWord(i);
-    if (!prev) { setBadge(i, 'empty'); break; }
+  for (let k = 0; k < STEPS; k++) {
+    const a = words[k];
+    const b = words[k + 1];
 
-    const isRepeat = usedWords(i).has(word.toLowerCase());
-    const result   = isRepeat ? { type: null, valid: false } : validateStep(prev, word);
-    stepResults[i] = result;
+    if (!a || !b) { stepResults[k] = null; continue; }
 
-    if (isRepeat) {
-      setBadge(i, 'X'); setInputState(i, 'X'); setMoveLabel(i, 'repeat');
-    } else if (!result?.valid) {
-      setBadge(i, 'X'); setInputState(i, 'X'); setMoveLabel(i, 'X');
-    } else {
-      setBadge(i, result.type); setInputState(i, result.type); setMoveLabel(i, result.type);
+    // Repeat check only for user-typed slots (k=0..3); k=4 auto-steps to fixed END
+    if (k < USER_INPUTS && checkRepeat(k, b)) {
+      stepResults[k] = { type: null, valid: false, repeat: true };
+      continue;
     }
+
+    stepResults[k] = validateStep(a, b);
   }
-  updateFinalStep();
+
+  updateVisuals();
   updateConstraints();
   checkWin();
 }
@@ -984,7 +1018,7 @@ function onKeydown(i, e) {
   if (e.key === 'Enter') {
     e.preventDefault();
     clearTimeout(debounceIds[i]);
-    runValidation(i);
+    runValidation();
     if (i+1 < USER_INPUTS) getInput(i+1)?.focus();
   }
 }
@@ -1002,7 +1036,7 @@ function buildChain() {
   for (let i = 0; i < USER_INPUTS; i++) {
     const gap = document.createElement('div');
     gap.className = 'step-gap';
-    gap.innerHTML = `<div class="gap-line"></div><div class="badge empty" id="badge-${i}"></div><div class="gap-line"></div>`;
+    gap.innerHTML = `<div class="gap-line" id="line-top-${i}"></div><div class="badge empty" id="badge-${i}"></div><div class="gap-line" id="line-bot-${i}"></div>`;
     chain.appendChild(gap);
 
     const row = document.createElement('div');
