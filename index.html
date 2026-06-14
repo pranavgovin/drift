@@ -810,7 +810,7 @@ function setInputState(i, state) {
   inp.className = state ? `state-${state}` : '';
 }
 
-const MOVE_TEXT = { L: 'letter', M: 'meaning', X: '✕', repeat: 'used' };
+const MOVE_TEXT = { L: 'letter', M: 'meaning', X: '✕', repeat: 'used', word: 'Not a valid word.' };
 function setMoveLabel(i, state) {
   const el = document.getElementById(`label-${i}`);
   if (!el) return;
@@ -825,6 +825,11 @@ function getChainWords() {
     ...[0,1,2,3].map(i => getInput(i)?.value.trim().toLowerCase() || ''),
     END,
   ];
+}
+
+// Real-word check: must be in the words_alpha set or the USF meaning graph
+function isRealWord(word) {
+  return FREQ_WORDS.has(word) || USF_NBRS.has(word);
 }
 
 // True if the word at slotIdx appears elsewhere in the filled chain
@@ -874,8 +879,10 @@ function updateVisuals() {
 
     if (aboveInvalid) {
       setInputState(i, 'X');
-      setMoveLabel(i, above.repeat ? 'repeat' : 'X');
-    } else if (belowInvalid) {
+      setMoveLabel(i, above.notWord ? 'word' : above.repeat ? 'repeat' : 'X');
+    } else if (belowInvalid && !below.notWord) {
+      // Only blame slot i if the connection below fails due to a real mismatch,
+      // not because slot i+1 has an invalid word (that slot shows its own error)
       setInputState(i, 'X');
       setMoveLabel(i, above?.type ?? null);
     } else if (above?.valid) {
@@ -1075,6 +1082,12 @@ function runValidation() {
     const b = words[k + 1];
 
     if (!a || !b) { stepResults[k] = null; continue; }
+
+    // Real-word check (user-typed slots only; END is fixed)
+    if (k < USER_INPUTS && !isRealWord(b)) {
+      stepResults[k] = { type: null, valid: false, notWord: true };
+      continue;
+    }
 
     // Repeat check only for user-typed slots (k=0..3); k=4 auto-steps to fixed END
     if (k < USER_INPUTS && checkRepeat(k, b)) {
