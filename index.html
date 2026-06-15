@@ -222,10 +222,12 @@ header {
   transition: color 0.2s ease;
   user-select: none;
 }
-.move-label.label-L      { color: var(--blue); }
-.move-label.label-M      { color: var(--purple); }
-.move-label.label-X      { color: var(--red); }
-.move-label.label-repeat { color: var(--muted); }
+.move-label.label-L       { color: var(--blue); }
+.move-label.label-M       { color: var(--purple); }
+.move-label.label-X       { color: var(--red); }
+.move-label.label-repeat  { color: var(--muted); }
+.move-label.label-word    { color: var(--red); }
+.move-label.label-blocked { color: var(--red); }
 
 /* Connector lines are colored once both adjacent words are filled */
 .gap-line.line-L { background: var(--blue); }
@@ -630,8 +632,8 @@ header {
 <div class="final-error" id="final-error"></div>
 
 <div class="rules">
-  <b>L</b> change, add, or drop one letter &nbsp;·&nbsp; <b>M</b> synonym<br>
-  exactly 5 steps · at least 2 of each
+  <b>L</b> change, add, or drop one letter &nbsp;·&nbsp; <b>M</b> meaning-based move<br>
+  exactly 5 steps · at least 2 of each · 6 letters max
 </div>
 
 <!-- Win overlay -->
@@ -688,6 +690,8 @@ header {
         <li>At least 2 letter moves</li>
         <li>At least 2 meaning moves</li>
         <li>No repeating words</li>
+        <li>Words must be 6 letters or fewer</li>
+        <li>There's more than one valid path</li>
       </ul>
     </div>
 
@@ -933,11 +937,11 @@ function updateConstraints() {
   const cL = document.getElementById('citem-L');
   const cM = document.getElementById('citem-M');
   if (cL) {
-    cL.textContent = lMet ? '✓ Letter' : `Need ${MIN_EACH - lc} more Letter`;
+    cL.textContent = lMet ? '✓ Letter' : `At least ${MIN_EACH - lc} more Letter`;
     cL.classList.toggle('met', lMet);
   }
   if (cM) {
-    cM.textContent = mMet ? '✓ Meaning' : `Need ${MIN_EACH - mc} more Meaning`;
+    cM.textContent = mMet ? '✓ Meaning' : `At least ${MIN_EACH - mc} more Meaning`;
     cM.classList.toggle('met', mMet);
   }
   document.getElementById('count-steps').textContent = vc;
