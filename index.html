@@ -598,6 +598,101 @@ header {
   letter-spacing: 0.04em;
   opacity: 0.65;
 }
+
+/* ── Archive overlay ─────────────────────────────────────── */
+.archive-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(250,247,242,0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+.archive-overlay.show { display: flex; }
+
+.archive-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 1.5rem 1.6rem 0.5rem;
+  max-width: 360px;
+  width: 100%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 40px rgba(0,0,0,0.07);
+  animation: popIn 0.3s cubic-bezier(.34,1.56,.64,1) both;
+}
+
+.archive-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+.archive-title {
+  font-family: 'Lora', Palatino, 'Palatino Linotype', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.archive-list {
+  overflow-y: auto;
+  flex: 1;
+  padding-bottom: 1rem;
+}
+
+.archive-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  gap: 0.75rem;
+}
+.archive-row:last-child { border-bottom: none; }
+.archive-row:hover { opacity: 0.6; }
+.archive-row.is-active { cursor: default; }
+.archive-row.is-active:hover { opacity: 1; }
+
+.archive-left { display: flex; flex-direction: column; gap: 0.12rem; }
+.archive-date {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.archive-num {
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.archive-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.archive-emoji { font-size: 0.72rem; letter-spacing: 0.02em; }
+.archive-time  { font-size: 0.62rem; color: var(--muted); font-weight: 500; }
+.archive-play  { font-size: 0.65rem; font-weight: 600; color: var(--accent); }
+.archive-badge {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-style: italic;
+}
 </style>
 <script defer src="/_vercel/insights/script.js"></script>
 </head>
@@ -610,6 +705,7 @@ header {
   </div>
   <div class="header-right">
     <div class="timer" id="timer">0:00</div>
+    <button class="help-btn" onclick="openArchive()" aria-label="Archive" style="font-size:1rem;line-height:1;">☰</button>
     <button class="help-btn" onclick="openHelp()" aria-label="How to play">?</button>
   </div>
 </header>
@@ -649,6 +745,17 @@ header {
       <button class="btn btn-copy" id="btn-copy" onclick="copyResult()">Copy result</button>
     </div>
     <div class="win-tomorrow" id="win-tomorrow"></div>
+  </div>
+</div>
+
+<!-- Archive overlay -->
+<div class="archive-overlay" id="archive-overlay" onclick="if(event.target===this)closeArchive()">
+  <div class="archive-card">
+    <div class="archive-head">
+      <div class="archive-title">Archive</div>
+      <button class="help-close" onclick="closeArchive()" aria-label="Close">✕</button>
+    </div>
+    <div class="archive-list" id="archive-list"></div>
   </div>
 </div>
 
@@ -747,6 +854,7 @@ const MIN_EACH    = 2;
 const DEBOUNCE_MS = 650;
 
 // ── Game state ────────────────────────────────────────────────────────────────
+let currentPuzzleDate = '';
 let stepResults   = Array(STEPS).fill(null);
 let debounceIds   = Array(STEPS).fill(null);
 let startTime     = null;
@@ -1034,11 +1142,27 @@ function triggerWin() {
   const gameUrl = window.location.href.split('?')[0].split('#')[0];
   window._shareText = `${puzzleLabel} · ${timeStr}\n${emojis}\n🔵 letter  🟣 meaning\n${gameUrl}`;
 
-  // Tomorrow's date
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tStr = tomorrow.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
-  document.getElementById('win-tomorrow').textContent = `next puzzle ${tStr}`;
+  if (currentPuzzleDate) saveResult(currentPuzzleDate, emojis, timeStr);
+
+  // Footer: "next puzzle" for today's puzzle, "back to today" for archive
+  const winFooter = document.getElementById('win-tomorrow');
+  const isArchive = currentPuzzleDate && currentPuzzleDate !== todayKey();
+  if (isArchive) {
+    winFooter.textContent = 'play today\'s puzzle →';
+    winFooter.style.cursor = 'pointer';
+    winFooter.onclick = () => {
+      closeWin();
+      const today = todayKey();
+      if (PUZZLES[today]) loadPuzzle(PUZZLES[today], today);
+    };
+  } else {
+    winFooter.onclick = null;
+    winFooter.style.cursor = '';
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tStr = tomorrow.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+    winFooter.textContent = `next puzzle ${tStr}`;
+  }
 
   document.getElementById('overlay').classList.add('show');
 }
@@ -1173,7 +1297,8 @@ function buildChain() {
 }
 
 // ── Load puzzle ────────────────────────────────────────────────────────────────
-function loadPuzzle(puzz) {
+function loadPuzzle(puzz, dateKey) {
+  currentPuzzleDate = dateKey || '';
   puzzle = puzz;
   START  = puzz.start.toLowerCase();
   END    = puzz.end.toLowerCase();
@@ -1204,6 +1329,80 @@ function openHelp()  { document.getElementById('help-overlay').classList.add('sh
 function closeHelp() { document.getElementById('help-overlay').classList.remove('show'); }
 function closeWin()  { document.getElementById('overlay').classList.remove('show'); }
 
+// ── Archive ───────────────────────────────────────────────────────────────────
+function getSavedResults() {
+  try { return JSON.parse(localStorage.getItem('drift_results') || '{}'); }
+  catch { return {}; }
+}
+function saveResult(dateKey, emoji, timeStr) {
+  const results = getSavedResults();
+  if (!results[dateKey]) {
+    results[dateKey] = { emoji, time: timeStr };
+    localStorage.setItem('drift_results', JSON.stringify(results));
+  }
+}
+
+function openArchive() {
+  buildArchiveList();
+  document.getElementById('archive-overlay').classList.add('show');
+}
+function closeArchive() {
+  document.getElementById('archive-overlay').classList.remove('show');
+}
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function buildArchiveList() {
+  const listEl  = document.getElementById('archive-list');
+  listEl.innerHTML = '';
+  const saved   = getSavedResults();
+  const today   = todayKey();
+
+  const dates = Object.keys(PUZZLES)
+    .filter(k => k <= today)
+    .sort((a, b) => b.localeCompare(a)); // newest first
+
+  dates.forEach(dateKey => {
+    const puzz    = PUZZLES[dateKey];
+    const isToday = dateKey === today;
+    const active  = dateKey === currentPuzzleDate;
+    const result  = saved[dateKey];
+
+    const dateObj = new Date(dateKey + 'T12:00:00');
+    const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    const row = document.createElement('div');
+    row.className = `archive-row${active ? ' is-active' : ''}`;
+    if (!active) {
+      row.onclick = () => { closeArchive(); loadPuzzle(puzz, dateKey); };
+    }
+
+    const left = document.createElement('div');
+    left.className = 'archive-left';
+    left.innerHTML = `
+      <div class="archive-date">${dateStr}${isToday ? ' <span style="color:var(--muted);font-weight:400;font-size:0.62rem;">Today</span>' : ''}</div>
+      <div class="archive-num">Drift #${puzz.id} &nbsp;·&nbsp; ${puzz.start.toUpperCase()} → ${puzz.end.toUpperCase()}</div>
+    `;
+
+    const right = document.createElement('div');
+    right.className = 'archive-right';
+    if (active) {
+      right.innerHTML = '<span class="archive-badge">playing</span>';
+    } else if (result) {
+      right.innerHTML = `<span class="archive-emoji">${result.emoji}</span><span class="archive-time">${result.time}</span>`;
+    } else {
+      right.innerHTML = '<span class="archive-play">Play →</span>';
+    }
+
+    row.appendChild(left);
+    row.appendChild(right);
+    listEl.appendChild(row);
+  });
+}
+
 // ── Init (date-keyed) ──────────────────────────────────────────────────────────
 function init() {
   if (window.DRIFT_WORDS) {
@@ -1215,10 +1414,9 @@ function init() {
     }
   }
   PUZZLES = window.DRIFT_PUZZLES ?? {};
-  const d = new Date();
-  const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const today = todayKey();
   const puzz  = PUZZLES[today] ?? Object.values(PUZZLES)[0];
-  loadPuzzle(puzz);
+  loadPuzzle(puzz, PUZZLES[today] ? today : Object.keys(PUZZLES)[0]);
 }
 
 init();
