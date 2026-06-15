@@ -1084,25 +1084,25 @@ function runValidation() {
     const a = words[k];
     const b = words[k + 1];
 
-    if (!a || !b) { stepResults[k] = null; continue; }
+    // If the slot itself is empty there's nothing to validate
+    if (!b) { stepResults[k] = null; continue; }
 
-    // Blocked-word check (runs first, before any other validation)
-    if (k < USER_INPUTS && BLOCKED_WORDS.has(b)) {
-      stepResults[k] = { type: null, valid: false, blocked: true };
-      continue;
+    // Word-level checks run as soon as the word is typed, even if the word above
+    // is not yet filled — they don't depend on the connection direction
+    if (k < USER_INPUTS) {
+      if (BLOCKED_WORDS.has(b)) {
+        stepResults[k] = { type: null, valid: false, blocked: true }; continue;
+      }
+      if (!isRealWord(b)) {
+        stepResults[k] = { type: null, valid: false, notWord: true }; continue;
+      }
+      if (checkRepeat(k, b)) {
+        stepResults[k] = { type: null, valid: false, repeat: true }; continue;
+      }
     }
 
-    // Real-word check (user-typed slots only; END is fixed)
-    if (k < USER_INPUTS && !isRealWord(b)) {
-      stepResults[k] = { type: null, valid: false, notWord: true };
-      continue;
-    }
-
-    // Repeat check only for user-typed slots (k=0..3); k=4 auto-steps to fixed END
-    if (k < USER_INPUTS && checkRepeat(k, b)) {
-      stepResults[k] = { type: null, valid: false, repeat: true };
-      continue;
-    }
+    // Connection-level check needs both adjacent words to be present
+    if (!a) { stepResults[k] = null; continue; }
 
     stepResults[k] = validateStep(a, b);
   }
