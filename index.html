@@ -749,6 +749,9 @@ let startTime     = null;
 let timerInterval = null;
 let gameWon       = false;
 
+// ── Content blocklist (LDNOOBW — single-word entries) ─────────────────────────
+const BLOCKED_WORDS = new Set(["2g1c","acrotomophilia","anal","anilingus","anus","apeshit","arsehole","ass","asshole","assmunch","autoerotic","babeland","bangbros","bangbus","bareback","barenaked","bastard","bastardo","bastinado","bbw","bdsm","beaner","beaners","beastiality","bestiality","bimbos","birdlock","bitch","bitches","blowjob","blumpkin","bollocks","bondage","boner","boob","boobs","bukkake","bulldyke","bullshit","bunghole","busty","butt","buttcheeks","butthole","camgirl","camslut","camwhore","carpetmuncher","cialis","circlejerk","clit","clitoris","clusterfuck","cock","cocks","coon","coons","coprolagnia","coprophilia","cornhole","creampie","cum","cumming","cumshot","cumshots","cunnilingus","cunt","darkie","daterape","deepthroat","dendrophilia","dick","dildo","dingleberries","dingleberry","doggiestyle","doggystyle","dolcett","domination","dominatrix","dommes","dvda","ecchi","ejaculation","erotic","erotism","escort","eunuch","fag","faggot","fecal","felch","fellatio","feltch","femdom","figging","fingerbang","fingering","fisting","footjob","frotting","fuck","fuckin","fucking","fucktards","fudgepacker","futanari","g-spot","gangbang","genitals","goatcx","goatse","gokkun","goodpoop","goregasm","grope","guro","handjob","hardcore","hentai","homoerotic","honkey","hooker","horny","humping","incest","intercourse","jailbait","jigaboo","jiggaboo","jiggerboo","jizz","juggs","kike","kinbaku","kinkster","kinky","knobbing","livesex","lolita","lovemaking","masturbate","masturbating","masturbation","milf","mong","motherfucker","muffdiving","nambla","nawashi","negro","neonazi","nigga","nigger","nimphomania","nipple","nipples","nsfw","nude","nudity","nutten","nympho","nymphomania","octopussy","omorashi","orgasm","orgy","paedophile","paki","panties","panty","pedobear","pedophile","pegging","penis","pikey","pissing","pisspig","playboy","ponyplay","poof","poon","poontang","poopchute","porn","porno","pornography","pthc","pubes","punany","pussy","queaf","queef","quim","raghead","rape","raping","rapist","rectum","rimjob","rimming","s&m","sadism","santorum","scat","schlong","scissoring","semen","sex","sexcam","sexo","sexual","sexuality","sexually","sexy","shemale","shibari","shit","shitblimp","shitty","shota","shrimping","skeet","slanteye","slut","smut","snatch","snowballing","sodomize","sodomy","spastic","spic","splooge","spooge","spunk","strapon","strappado","suck","sucks","swastika","swinger","threesome","throating","thumbzilla","tit","tits","titties","titty","topless","tosser","towelhead","tranny","tribadism","tubgirl","tushy","twat","twink","twinkie","undressing","upskirt","urophilia","vagina","viagra","vibrator","vorarephilia","voyeur","voyeurweb","voyuer","vulva","wank","wetback","whore","worldsex","xx","xxx","yaoi","yiffy","zoophilia"]);
+
 // ── Word lists (loaded at init) ────────────────────────────────────────────────
 let FREQ_WORDS   = new Set(); // words_alpha 3-6 chars — letter move validation
 let USF_NBRS     = new Map(); // bidirectional USF graph — primary meaning moves
@@ -810,7 +813,7 @@ function setInputState(i, state) {
   inp.className = state ? `state-${state}` : '';
 }
 
-const MOVE_TEXT = { L: 'letter', M: 'meaning', X: '✕', repeat: 'used', word: 'Not a valid word.' };
+const MOVE_TEXT = { L: 'letter', M: 'meaning', X: '✕', repeat: 'used', word: 'Not a valid word.', blocked: 'Word not allowed.' };
 function setMoveLabel(i, state) {
   const el = document.getElementById(`label-${i}`);
   if (!el) return;
@@ -879,7 +882,7 @@ function updateVisuals() {
 
     if (aboveInvalid) {
       setInputState(i, 'X');
-      setMoveLabel(i, above.notWord ? 'word' : above.repeat ? 'repeat' : 'X');
+      setMoveLabel(i, above.blocked ? 'blocked' : above.notWord ? 'word' : above.repeat ? 'repeat' : 'X');
     } else if (belowInvalid && !below.notWord) {
       // Only blame slot i if the connection below fails due to a real mismatch,
       // not because slot i+1 has an invalid word (that slot shows its own error)
@@ -1082,6 +1085,12 @@ function runValidation() {
     const b = words[k + 1];
 
     if (!a || !b) { stepResults[k] = null; continue; }
+
+    // Blocked-word check (runs first, before any other validation)
+    if (k < USER_INPUTS && BLOCKED_WORDS.has(b)) {
+      stepResults[k] = { type: null, valid: false, blocked: true };
+      continue;
+    }
 
     // Real-word check (user-typed slots only; END is fixed)
     if (k < USER_INPUTS && !isRealWord(b)) {
