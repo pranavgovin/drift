@@ -389,6 +389,52 @@ header {
   opacity: 0.75;
 }
 
+/* ── Invisible-ink reveal ─────────────────────────────────── */
+.ink-reveal {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.ink-words {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  line-height: 1.6;
+  filter: blur(7px);
+  transition: filter 0.4s ease;
+  pointer-events: none;
+}
+.ink-reveal.revealed .ink-words { filter: none; }
+.ink-cover {
+  position: absolute;
+  inset: 0;
+  background: rgba(30, 25, 20, 0.88);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+.ink-reveal.revealed .ink-cover { opacity: 0; }
+
+/* two-button row */
+.btn-row { gap: 0.5rem; flex-wrap: wrap; }
+.win-card .btn { padding: 0.62rem 1.35rem; }
+.btn-copy-chain.copied { border-color: var(--accent); color: var(--accent); }
+
 /* ── Help button ─────────────────────────────────────────── */
 .header-right {
   display: flex;
@@ -741,8 +787,13 @@ header {
     <div class="win-time" id="win-time">0:00</div>
     <div class="win-path" id="win-path"></div>
     <div class="emoji-share" id="emoji-share"></div>
+    <div class="ink-reveal" id="ink-reveal" onclick="revealInk()">
+      <div class="ink-words" id="ink-words"></div>
+      <div class="ink-cover">tap to reveal</div>
+    </div>
     <div class="btn-row">
       <button class="btn btn-copy" id="btn-copy" onclick="copyResult()">Copy result</button>
+      <button class="btn btn-copy-chain" id="btn-copy-chain" onclick="copyResultWithChain()">Copy with chain</button>
     </div>
     <div class="win-tomorrow" id="win-tomorrow"></div>
   </div>
@@ -1101,48 +1152,70 @@ function checkWin() {
   }
 }
 
-function triggerWin() {
+// opts.timeStr  – override elapsed (for restored completed puzzles)
+// opts.skipSave – don't re-write drift_results (already stored)
+// opts.emoji    – fallback emoji string when stepResults aren't available
+function triggerWin(opts = {}) {
   gameWon = true;
   stopTimer();
   document.querySelector('.anchor-end')?.classList.add('reached');
 
-  const timeStr = fmtTime(elapsed());
+  const timeStr = opts.timeStr || fmtTime(elapsed());
   document.getElementById('win-eyebrow').textContent = puzzle ? `Drift #${puzzle.id}` : 'Drift';
   document.getElementById('win-time').textContent = timeStr;
 
-  // Path: inline chain with colored arrows
-  const words = [
-    START.toUpperCase(),
-    ...Array.from({length: USER_INPUTS}, (_, i) => getInput(i).value.trim().toUpperCase()),
-    END.toUpperCase(),
-  ];
+  // Path: only render if stepResults are fully valid (fresh win or properly restored)
   const pathEl = document.getElementById('win-path');
   pathEl.innerHTML = '';
-  const chainEl = document.createElement('div');
-  chainEl.className = 'win-chain';
-  words.forEach((word, i) => {
-    const wspan = document.createElement('span');
-    wspan.className = `win-word${i === words.length-1 ? ' is-end' : ''}`;
-    wspan.textContent = word;
-    chainEl.appendChild(wspan);
-    if (i < STEPS) {
-      const arr = document.createElement('span');
-      arr.className = `win-arrow ${stepResults[i].type}`;
-      arr.textContent = '→';
-      chainEl.appendChild(arr);
-    }
-  });
-  pathEl.appendChild(chainEl);
+  const allValid = stepResults.every(r => r?.valid);
+  let chainText = '';
+  if (allValid) {
+    const words = [
+      START.toUpperCase(),
+      ...Array.from({length: USER_INPUTS}, (_, i) => getInput(i).value.trim().toUpperCase()),
+      END.toUpperCase(),
+    ];
+    chainText = words.join(' → ');
+    const chainEl = document.createElement('div');
+    chainEl.className = 'win-chain';
+    words.forEach((word, i) => {
+      const wspan = document.createElement('span');
+      wspan.className = `win-word${i === words.length-1 ? ' is-end' : ''}`;
+      wspan.textContent = word;
+      chainEl.appendChild(wspan);
+      if (i < STEPS) {
+        const arr = document.createElement('span');
+        arr.className = `win-arrow ${stepResults[i].type}`;
+        arr.textContent = '→';
+        chainEl.appendChild(arr);
+      }
+    });
+    pathEl.appendChild(chainEl);
+  }
 
-  // Emoji share
-  const emojis = stepResults.map(r => r?.type === 'L' ? '🔵' : '🟣').join('');
+  // Emoji share — computed from stepResults when valid, otherwise use stored fallback
+  const emojis = allValid
+    ? stepResults.map(r => r?.type === 'L' ? '🔵' : '🟣').join('')
+    : (opts.emoji || '');
   document.getElementById('emoji-share').textContent = emojis;
 
   const puzzleLabel = puzzle ? `Drift #${puzzle.id}` : 'Drift';
   const gameUrl = window.location.href.split('?')[0].split('#')[0];
   window._shareText = `${puzzleLabel} · ${timeStr}\n${emojis}\n🔵 letter  🟣 meaning\n${gameUrl}`;
 
-  if (currentPuzzleDate) saveResult(currentPuzzleDate, emojis, timeStr);
+  // Ink-reveal section: populate chain text and reset to covered state
+  const inkReveal  = document.getElementById('ink-reveal');
+  const inkWordsEl = document.getElementById('ink-words');
+  if (inkWordsEl) inkWordsEl.textContent = chainText;
+  if (inkReveal) {
+    inkReveal.classList.remove('revealed');
+    inkReveal.style.display = chainText ? '' : 'none';
+  }
+  window._shareTextWithChain = chainText
+    ? `${puzzleLabel} ⏱ ${timeStr}\n${emojis}\n\n[Spoiler: ${chainText}]`
+    : '';
+
+  if (currentPuzzleDate && !opts.skipSave) saveResult(currentPuzzleDate, emojis, timeStr);
 
   // Footer: "next puzzle" for today's puzzle, "back to today" for archive
   const winFooter = document.getElementById('win-tomorrow');
@@ -1185,6 +1258,28 @@ function copyResult() {
   });
 }
 
+function revealInk() {
+  document.getElementById('ink-reveal')?.classList.add('revealed');
+}
+
+function copyResultWithChain() {
+  const btn  = document.getElementById('btn-copy-chain');
+  const text = window._shareTextWithChain || '';
+  if (!text) return;
+  const finish = () => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy with chain'; btn.classList.remove('copied'); }, 2000);
+  };
+  navigator.clipboard.writeText(text).then(finish).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    finish();
+  });
+}
+
 // ── Input handlers ─────────────────────────────────────────────────────────────
 function onInput(i) {
   if (gameWon) return;
@@ -1196,6 +1291,7 @@ function onInput(i) {
   if (!filt) {
     setInputState(i, null); setMoveLabel(i, null);
     runValidation();
+    saveProgress();
     return;
   }
 
@@ -1203,10 +1299,10 @@ function onInput(i) {
   setBadge(i, 'typing');
   setMoveLabel(i, null);
   clearTimeout(debounceIds[i]);
-  debounceIds[i] = setTimeout(() => runValidation(), DEBOUNCE_MS);
+  debounceIds[i] = setTimeout(() => { runValidation(); saveProgress(); }, DEBOUNCE_MS);
 }
 
-function runValidation() {
+function runValidation(skipWin = false) {
   const words = getChainWords(); // [START, s0, s1, s2, s3, END]
 
   for (let k = 0; k < STEPS; k++) {
@@ -1238,7 +1334,7 @@ function runValidation() {
 
   updateVisuals();
   updateConstraints();
-  checkWin();
+  if (!skipWin) checkWin();
 }
 
 function onKeydown(i, e) {
@@ -1321,13 +1417,50 @@ function loadPuzzle(puzz, dateKey) {
 
   buildChain();
   updateConstraints();
-  getInput(0)?.focus();
+
+  // Restore completed or in-progress state
+  const savedResult = getSavedResults()[dateKey];
+  if (savedResult) {
+    // Puzzle already completed — restore words so the path displays correctly,
+    // then show the win overlay with the stored time (don't re-save).
+    if (savedResult.words && savedResult.words.some(Boolean)) {
+      savedResult.words.forEach((val, i) => {
+        const inp = getInput(i);
+        if (inp && val) inp.value = val;
+      });
+      runValidation(true); // populate stepResults without triggering win again
+    }
+    triggerWin({ timeStr: savedResult.time, skipSave: true, emoji: savedResult.emoji });
+  } else {
+    // Check for in-progress draft saved mid-play
+    try {
+      const raw = localStorage.getItem(`drift_state_${dateKey}`);
+      if (raw) {
+        const vals = JSON.parse(raw);
+        if (Array.isArray(vals) && vals.length === 4) {
+          vals.forEach((val, i) => {
+            const inp = getInput(i);
+            if (inp && val) inp.value = val;
+          });
+          runValidation();
+        }
+      }
+    } catch {}
+    getInput(0)?.focus();
+  }
 }
 
 // ── Help modal ────────────────────────────────────────────────────────────────
 function openHelp()  { document.getElementById('help-overlay').classList.add('show'); }
 function closeHelp() { document.getElementById('help-overlay').classList.remove('show'); }
 function closeWin()  { document.getElementById('overlay').classList.remove('show'); }
+
+// ── Progress persistence ───────────────────────────────────────────────────────
+function saveProgress() {
+  if (!currentPuzzleDate || gameWon) return;
+  const vals = [0,1,2,3].map(i => getInput(i)?.value || '');
+  try { localStorage.setItem(`drift_state_${currentPuzzleDate}`, JSON.stringify(vals)); } catch {}
+}
 
 // ── Archive ───────────────────────────────────────────────────────────────────
 function getSavedResults() {
@@ -1337,9 +1470,11 @@ function getSavedResults() {
 function saveResult(dateKey, emoji, timeStr) {
   const results = getSavedResults();
   if (!results[dateKey]) {
-    results[dateKey] = { emoji, time: timeStr };
+    const words = [0,1,2,3].map(i => getInput(i)?.value.trim() || '');
+    results[dateKey] = { emoji, time: timeStr, words };
     localStorage.setItem('drift_results', JSON.stringify(results));
   }
+  try { localStorage.removeItem(`drift_state_${dateKey}`); } catch {}
 }
 
 function openArchive() {
