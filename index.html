@@ -389,52 +389,6 @@ header {
   opacity: 0.75;
 }
 
-/* ── Invisible-ink reveal ─────────────────────────────────── */
-.ink-reveal {
-  background: var(--bg);
-  border-radius: 10px;
-  padding: 0.65rem 1rem;
-  margin-bottom: 1rem;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
-.ink-words {
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--text);
-  line-height: 1.6;
-  filter: blur(7px);
-  transition: filter 0.4s ease;
-  pointer-events: none;
-}
-.ink-reveal.revealed .ink-words { filter: none; }
-.ink-cover {
-  position: absolute;
-  inset: 0;
-  background: rgba(30, 25, 20, 0.88);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.56rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
-  transition: opacity 0.35s ease;
-  pointer-events: none;
-}
-.ink-reveal.revealed .ink-cover { opacity: 0; }
-
-/* two-button row */
-.btn-row { gap: 0.5rem; flex-wrap: wrap; }
-.win-card .btn { padding: 0.62rem 1.35rem; }
-.btn-copy-chain.copied { border-color: var(--accent); color: var(--accent); }
-
 /* ── Help button ─────────────────────────────────────────── */
 .header-right {
   display: flex;
@@ -787,13 +741,8 @@ header {
     <div class="win-time" id="win-time">0:00</div>
     <div class="win-path" id="win-path"></div>
     <div class="emoji-share" id="emoji-share"></div>
-    <div class="ink-reveal" id="ink-reveal" onclick="revealInk()">
-      <div class="ink-words" id="ink-words"></div>
-      <div class="ink-cover">tap to reveal</div>
-    </div>
     <div class="btn-row">
       <button class="btn btn-copy" id="btn-copy" onclick="copyResult()">Copy result</button>
-      <button class="btn btn-copy-chain" id="btn-copy-chain" onclick="copyResultWithChain()">Copy with chain</button>
     </div>
     <div class="win-tomorrow" id="win-tomorrow"></div>
   </div>
@@ -1168,14 +1117,12 @@ function triggerWin(opts = {}) {
   const pathEl = document.getElementById('win-path');
   pathEl.innerHTML = '';
   const allValid = stepResults.every(r => r?.valid);
-  let chainText = '';
   if (allValid) {
     const words = [
       START.toUpperCase(),
       ...Array.from({length: USER_INPUTS}, (_, i) => getInput(i).value.trim().toUpperCase()),
       END.toUpperCase(),
     ];
-    chainText = words.join(' → ');
     const chainEl = document.createElement('div');
     chainEl.className = 'win-chain';
     words.forEach((word, i) => {
@@ -1202,18 +1149,6 @@ function triggerWin(opts = {}) {
   const puzzleLabel = puzzle ? `Drift #${puzzle.id}` : 'Drift';
   const gameUrl = window.location.href.split('?')[0].split('#')[0];
   window._shareText = `${puzzleLabel} · ${timeStr}\n${emojis}\n🔵 letter  🟣 meaning\n${gameUrl}`;
-
-  // Ink-reveal section: populate chain text and reset to covered state
-  const inkReveal  = document.getElementById('ink-reveal');
-  const inkWordsEl = document.getElementById('ink-words');
-  if (inkWordsEl) inkWordsEl.textContent = chainText;
-  if (inkReveal) {
-    inkReveal.classList.remove('revealed');
-    inkReveal.style.display = chainText ? '' : 'none';
-  }
-  window._shareTextWithChain = chainText
-    ? `${puzzleLabel} ⏱ ${timeStr}\n${emojis}\n\n[Spoiler: ${chainText}]`
-    : '';
 
   if (currentPuzzleDate && !opts.skipSave) saveResult(currentPuzzleDate, emojis, timeStr);
 
@@ -1248,28 +1183,6 @@ function copyResult() {
     btn.textContent = 'Copied!';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'Copy result'; btn.classList.remove('copied'); }, 2000);
-  };
-  navigator.clipboard.writeText(text).then(finish).catch(() => {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-    document.body.removeChild(ta);
-    finish();
-  });
-}
-
-function revealInk() {
-  document.getElementById('ink-reveal')?.classList.add('revealed');
-}
-
-function copyResultWithChain() {
-  const btn  = document.getElementById('btn-copy-chain');
-  const text = window._shareTextWithChain || '';
-  if (!text) return;
-  const finish = () => {
-    btn.textContent = 'Copied!';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'Copy with chain'; btn.classList.remove('copied'); }, 2000);
   };
   navigator.clipboard.writeText(text).then(finish).catch(() => {
     const ta = document.createElement('textarea');
