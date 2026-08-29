@@ -1168,8 +1168,8 @@ function triggerWin(opts = {}) {
     winFooter.style.cursor = '';
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tStr = tomorrow.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
-    winFooter.textContent = `next puzzle ${tStr}`;
+    const nextPuzzle = PUZZLES[formatDateKey(tomorrow)];
+    winFooter.textContent = nextPuzzle ? `next puzzle: Drift #${nextPuzzle.id}` : 'next puzzle tomorrow';
   }
 
   document.getElementById('overlay').classList.add('show');
@@ -1398,9 +1398,11 @@ function closeArchive() {
   document.getElementById('archive-overlay').classList.remove('show');
 }
 
-function todayKey() {
-  const d = new Date();
+function formatDateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function todayKey() {
+  return formatDateKey(new Date());
 }
 
 function buildArchiveList() {
@@ -1419,9 +1421,6 @@ function buildArchiveList() {
     const active  = dateKey === currentPuzzleDate;
     const result  = saved[dateKey];
 
-    const dateObj = new Date(dateKey + 'T12:00:00');
-    const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
     const row = document.createElement('div');
     row.className = `archive-row${active ? ' is-active' : ''}`;
     if (!active) {
@@ -1431,8 +1430,8 @@ function buildArchiveList() {
     const left = document.createElement('div');
     left.className = 'archive-left';
     left.innerHTML = `
-      <div class="archive-date">${dateStr}${isToday ? ' <span style="color:var(--muted);font-weight:400;font-size:0.62rem;">Today</span>' : ''}</div>
-      <div class="archive-num">Drift #${puzz.id} &nbsp;·&nbsp; ${puzz.start.toUpperCase()} → ${puzz.end.toUpperCase()}</div>
+      <div class="archive-date">Drift #${puzz.id}${isToday ? ' <span style="color:var(--muted);font-weight:400;font-size:0.62rem;">Today</span>' : ''}</div>
+      <div class="archive-num">${puzz.start.toUpperCase()} → ${puzz.end.toUpperCase()}</div>
     `;
 
     const right = document.createElement('div');
