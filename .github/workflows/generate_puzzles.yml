@@ -1,0 +1,47 @@
+name: Generate Puzzles
+
+on:
+  schedule:
+    - cron: '0 10 * * 0'  # every Sunday at 10:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r drift-tools/requirements.txt
+
+      - name: Run auto_generate.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python drift-tools/auto_generate.py --write
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet -- puzzles.json puzzles_data.js; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add puzzles.json puzzles_data.js
+          git commit -m "auto: add puzzles $(date -u +%F)"
+          git push
